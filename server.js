@@ -1,16 +1,14 @@
 // server.js
 //
-// Node backend for Handyman of Fairfax.
-// - Health check at GET /health
-// - WebSocket assistant at  /ws  (for testing / future chat)
-// - Twilio Voice webhook at POST /twilio-voice  (answers phone calls)
+// Backend for Handyman of Fairfax AI assistant
+// - GET  /health         : health check
+// - WS   /ws             : WebSocket chat interface
+// - ALL  /twilio-voice   : Twilio Voice webhook (phone calls)
 //
-// Twilio flow (simple v1):
-// - Call comes in -> Twilio hits /twilio-voice without SpeechResult
-// - We reply with <Gather input="speech"> asking what they need help with
-// - Twilio transcribes caller's speech and POSTs again with SpeechResult
-// - We send SpeechResult to OpenAI + knowledge base
-// - We respond with <Say> using the AI's answer
+// Requirements:
+// - Node 18+ (for global fetch)
+// - OPENAI_API_KEY in environment
+// - knowledge-base.json in the same directory
 
 const fs = require("fs");
 const path = require("path");
@@ -27,29 +25,43 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 if (!OPENAI_API_KEY) {
   console.warn(
-    "\n[WARN] OPENAI_API_KEY is not set. The assistant will not be able to call OpenAI.\n"
+    "\n[WARN] OPENAI_API_KEY is not set. The assistant will respond with a fallback message.\n"
   );
 }
 
-// Need this so Express can read Twilio's x-www-form-urlencoded POST body
+// Parse x-www-form-urlencoded bodies (Twilio sends this)
 app.use(express.urlencoded({ extended: true }));
 
-// Load knowledge base
+// ------------------------ Load knowledge base ------------------------
+
 const kbPath = path.join(__dirname, "knowledge-base.json");
 let knowledgeBase = {};
+
 try {
   const raw = fs.readFileSync(kbPath, "utf8");
   knowledgeBase = JSON.parse(raw);
+  console.log("Loaded knowledge-base.json");
 } catch (err) {
-  console.error("Error loading knowledge-base.json:", err);
+  console.error("Error loading knowledge-base.json:", err.message);
+  knowledgeBase = {
+    business_name: "Handyman of Fairfax",
+    location: "Fairfax, VA",
+    summary:
+      "Local handyman service for small to medium home repairs, minor carpentry, TV mounting, and general home fixes.",
+    service_area: ["Fairfax", "Fairfax Station", "Burke", "Springfield"],
+    hours: "Monday–Saturday, 8:00 AM – 6:00 PM",
+    contact_phone: "(555) 555-5555",
+  };
 }
 
-// ---------- 1. Health endpoint ----------
+// ------------------------ 1. Health endpoint ------------------------
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "handyman-ai-phone-assistant" });
 });
 
-// ---------- 2. WebSocket assistant (/ws) ----------
+// ------------------------ 2. WebSocket assistant ------------------------
+
 const wss = new WebSocketServer({ server, path: "/ws" });
 
 wss.on("connection", (ws) => {
@@ -90,7 +102,7 @@ wss.on("connection", (ws) => {
         JSON.stringify({
           type: "answer",
           answer:
-            "The AI backend isn't fully configured yet (no API key). Please contact Handyman of Fairfax directly at " +
+            "The AI backend is not fully configured yet (missing API key). Please contact Handyman of Fairfax directly at " +
             (knowledgeBase.contact_phone || "(phone not set)") +
             ".",
         })
@@ -107,7 +119,7 @@ wss.on("connection", (ws) => {
         JSON.stringify({
           type: "error",
           message:
-            "There was a problem talking to the AI. Please try again, or call the handyman directly.",
+            "There was a problem talking to the AI. Please try again later or call the handyman directly.",
         })
       );
     }
@@ -118,30 +130,27 @@ wss.on("connection", (ws) => {
   });
 });
 
-// ---------- 3. Twilio Voice webhook (/twilio-voice) ----------
+// ------------------------ 3. Twilio Voice webhook ------------------------
 //
-// This endpoint returns TwiML (XML) for Twilio.
-//
-// First request (no SpeechResult):
-//   -> Greet + <Gather input="speech">
-//
-// Second request (with SpeechResult):
-//   -> Call OpenAI, get a short voice-friendly answer
-//   -> <Say> that answer back to the caller
-//
-app.post("/twilio-voice", async (req, res) => {
+// IMPORTANT:
+// We use app.all so that both POST (Twilio) and manual GET/POST tests hit
+// the same handler. Twilio will send application/x-www-form-urlencoded.
+
+app.all("/twilio-voice", async (req, res) => {
   const from = req.body.From || "";
   const speechResult = (req.body.SpeechResult || "").trim();
 
   // Helper to send TwiML
   function twiml(xmlBody) {
     res.set("Content-Type", "text/xml");
-    res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<Response>${xmlBody}</Response>`);
+    res.send(
+      '<?xml version="1.0" encoding="UTF-8"?>\n<Response>' + xmlBody + "</Response>"
+    );
   }
 
-  // First time: no speech yet -> prompt the caller
+  // First request: no SpeechResult yet -> greet + <Gather>
   if (!speechResult) {
-    console.log("Twilio call started from", from);
+    console.log("Twilio call started from", from || "(unknown)");
 
     const gatherTwiml = `
       <Say voice="woman">
@@ -151,7 +160,7 @@ app.post("/twilio-voice", async (req, res) => {
       <Gather input="speech" action="/twilio-voice" method="POST" speechTimeout="auto">
         <Say>
           Please briefly describe what you need help with.
-          For example, say something like:
+          For example, you can say:
           I need a TV mounted, or I have a leaky faucet, or my door will not close properly.
           Then pause for a moment.
         </Say>
@@ -163,8 +172,8 @@ app.post("/twilio-voice", async (req, res) => {
     return;
   }
 
-  // Second time: Twilio sends us recognized speech
-  console.log("Twilio SpeechResult from", from, "->", speechResult);
+  // Second request: Twilio sends recognized speech
+  console.log("Twilio SpeechResult from", from || "(unknown)", "->", speechResult);
 
   if (!OPENAI_API_KEY) {
     const fallback = `
@@ -174,6 +183,7 @@ app.post("/twilio-voice", async (req, res) => {
           knowledgeBase.contact_phone || "our regular number"
         )}.
       </Say>
+      <Hangup/>
     `;
     twiml(fallback);
     return;
@@ -208,7 +218,7 @@ app.post("/twilio-voice", async (req, res) => {
   }
 });
 
-// ---------- OpenAI helpers ----------
+// ------------------------ OpenAI helpers ------------------------
 
 async function askOpenAIForChat(question, kb) {
   const systemPrompt = buildSystemPrompt(kb, false);
@@ -293,7 +303,8 @@ Write a short, natural voice response that:
 
 function buildSystemPrompt(kb, forPhone) {
   return `
-You are the intake and Q&A assistant for a local handyman service called "${kb.business_name}" in ${kb.location}.
+You are the intake and Q&A assistant for a local handyman service called "${kb.business_name ||
+    "Handyman of Fairfax"}" in ${kb.location || "Fairfax, VA"}.
 
 You answer questions about:
 - Services provided
@@ -307,24 +318,26 @@ SUMMARY:
 ${kb.summary || ""}
 
 SERVICE AREA:
-${(kb.service_area || []).join(", ")}
+${Array.isArray(kb.service_area) ? kb.service_area.join(", ") : ""}
 
 HOURS:
 ${kb.hours || ""}
 
 SERVICES:
-${(kb.services || []).join("; ")}
+${Array.isArray(kb.services) ? kb.services.join("; ") : ""}
 
 PRICING NOTES:
-${(kb.pricing_notes || []).join("; ")}
+${Array.isArray(kb.pricing_notes) ? kb.pricing_notes.join("; ") : ""}
 
 BOOKING PROCESS:
-${(kb.booking_process || []).join("; ")}
+${Array.isArray(kb.booking_process) ? kb.booking_process.join("; ") : ""}
 
 FAQ EXAMPLES:
-${(kb.faqs || [])
-  .map((f) => `Q: ${f.q}\nA: ${f.a}`)
-  .join("\n\n")}
+${Array.isArray(kb.faqs)
+    ? kb.faqs
+        .map((f) => `Q: ${f.q}\nA: ${f.a}`)
+        .join("\n\n")
+    : ""}
 
 Style guidelines:
 - Be friendly, clear, and professional.
@@ -336,13 +349,15 @@ Style guidelines:
 `.trim();
 }
 
-// Escape text for use inside <Say> in XML
+// Escape text for use inside <Say>
 function escapeForXml(text) {
   return String(text)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
+
+// ------------------------ Start server ------------------------
 
 server.listen(PORT, () => {
   console.log(`Handyman AI assistant listening on port ${PORT}`);
