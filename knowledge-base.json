@@ -1,0 +1,53 @@
+{
+  "business_name": "Handyman of Fairfax",
+  "location": "Fairfax, Virginia",
+  "service_area": [
+    "Fairfax",
+    "Fairfax Station",
+    "Burke",
+    "Springfield",
+    "Annandale",
+    "Merrifield",
+    "Centreville"
+  ],
+  "hours": "Monday\u2013Saturday, 8am\u20136pm. Closed Sundays except for true emergencies.",
+  "contact_phone": "(571) 283-2054",
+  "summary": "Handyman of Fairfax is a local handyman service for small to medium home repair and improvement projects in and around Fairfax, Virginia.",
+  "services": [
+    "TV mounting and cable concealment",
+    "Drywall patching and small wall repairs",
+    "Door alignment, lock and latch fixes",
+    "Ceiling fan and light fixture installation",
+    "Simple plumbing repairs (faucets, disposals, toilets that run, minor leaks)",
+    "Deck and fence repairs (loose boards, railings)",
+    "Furniture assembly",
+    "Caulking and weatherstripping around windows and doors",
+    "Small carpentry projects and trim repairs"
+  ],
+  "pricing_notes": [
+    "Most visits have a one-hour minimum charge plus materials.",
+    "Smaller jobs can often be completed within the first hour.",
+    "Larger projects are quoted individually after seeing photos or a walkthrough.",
+    "Emergency or after-hours work may have an additional fee."
+  ],
+  "booking_process": [
+    "Collect the caller's name, best callback number, and address or neighborhood.",
+    "Ask what they need help with and if there is any urgency or safety concern.",
+    "If possible, ask them to text or email photos after the call.",
+    "A handyman will follow up with a call or text to confirm details and schedule."
+  ],
+  "faqs": [
+    {
+      "q": "Do you work in Springfield?",
+      "a": "Yes, Springfield is within our regular service area for Handyman of Fairfax."
+    },
+    {
+      "q": "Do you handle big remodeling projects?",
+      "a": "We focus on small to medium repairs and improvements. Full-scale remodels are usually referred out to partner contractors."
+    },
+    {
+      "q": "Can you come out today?",
+      "a": "Same-day appointments depend on the schedule and urgency. We try to prioritize true safety issues like leaks or electrical concerns."
+    }
+  ]
+}

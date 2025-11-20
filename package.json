@@ -1,0 +1,14 @@
+{
+  "name": "handyman-ai-phone-assistant",
+  "version": "1.0.0",
+  "description": "AI answering backend for Handyman of Fairfax (Render + Node).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.0",
+    "ws": "^8.17.0",
+    "dotenv": "^16.4.0"
+  }
+}
